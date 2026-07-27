@@ -186,3 +186,45 @@ def fetch_intraday_minutes(stock_code, trade_date):
         except:
             pass
         return None
+
+
+def fetch_hourly_breakdown(stock_code, trade_date):
+    try:
+        _bs_login()
+        bs_code = f"sh.{stock_code}" if stock_code.startswith("6") else f"sz.{stock_code}"
+        date_fmt = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:]}"
+        rs = bs.query_history_k_data_plus(
+            bs_code,
+            "date,time,volume,amount",
+            start_date=date_fmt,
+            end_date=date_fmt,
+            frequency="5",
+            adjustflag="2",
+        )
+        hourly = {}
+        found = False
+        while rs.next():
+            r = rs.get_row_data()
+            if not r or not r[0]:
+                continue
+            found = True
+            time_str = r[1] if len(r) > 1 else ""
+            hour = int(time_str[8:10]) if len(time_str) >= 12 else 12
+            vol = float(r[2]) if r[2] else 0
+            amt = float(r[3]) if r[3] else 0
+            if hour not in hourly:
+                hourly[hour] = [0.0, 0.0]
+            hourly[hour][0] += vol
+            hourly[hour][1] += amt
+        bs.logout()
+        if not found or not hourly:
+            return None
+        sorted_hours = sorted(hourly.keys())
+        return [(trade_date, stock_code, h, hourly[h][0], hourly[h][1]) for h in sorted_hours]
+    except Exception as e:
+        print(f"  [WARN] fetch_hourly_breakdown for {trade_date}: {e}")
+        try:
+            bs.logout()
+        except:
+            pass
+        return None

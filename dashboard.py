@@ -1,6 +1,5 @@
 import streamlit as st
 import plotly.graph_objects as go
-import plotly.express as px
 from plotly.subplots import make_subplots
 import pandas as pd
 from datetime import datetime, timedelta
@@ -9,6 +8,7 @@ from database import (
     init_db, query_daily, query_fund_flow, query_margin, query_intraday,
 )
 from export_pdf import generate_pdf
+from fetcher import fetch_hourly_breakdown
 
 st.set_page_config(
     page_title="股票追踪看板",
@@ -17,6 +17,38 @@ st.set_page_config(
 )
 
 init_db()
+
+st.markdown("""
+<style>
+.custom-metric {
+    border: 1px solid rgba(128,128,128,0.2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+    background: #fff;
+}
+.metric-label {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 4px;
+}
+.metric-value {
+    font-size: 26px;
+    font-weight: bold;
+    margin: 6px 0;
+}
+.metric-delta {
+    display: inline-block;
+    padding: 2px 12px;
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+}
+.metric-delta.up { background-color: #d32f2f; }
+.metric-delta.down { background-color: #2e7d32; }
+</style>
+""", unsafe_allow_html=True)
 
 
 def fmt_num(v):
@@ -29,12 +61,6 @@ def fmt_pct(v):
     if v is None:
         return "-"
     return f"{v:+.2f}%"
-
-
-def fmt_yi(v):
-    if v is None:
-        return "-"
-    return f"{v/1e8:.2f}"
 
 
 def row_to_dict(r):
@@ -152,26 +178,55 @@ def main():
 
     if daily:
         latest = daily[-1]
-        prev = daily[-2] if len(daily) > 1 else latest
         change = latest["change_pct"] or 0
-        is_up = change >= 0
-        arrow = "📈" if is_up else "📉"
-        col1.metric(
-            f"{arrow} 最新收盘",
-            f"¥{fmt_num(latest['close'])}",
-            f"{fmt_pct(change)}",
-        )
-        col2.metric("开盘价", f"¥{fmt_num(latest['open'])}")
+        delta_up = change >= 0
         vol_val = (latest["volume"] or 0) / 1e4
-        col3.metric("成交量", f"{vol_val:.2f} 万手")
         amt_val = (latest["amount"] or 0) / 1e8
-        col4.metric("成交额", f"{amt_val:.2f} 亿元")
+        arrow = "📈" if delta_up else "📉"
+        delta_cls = "up" if delta_up else "down"
+
+        with col1:
+            st.markdown(f"""
+            <div class="custom-metric">
+                <div class="metric-label">{arrow} 最新收盘</div>
+                <div class="metric-value">¥{fmt_num(latest['close'])}</div>
+                <div><span class="metric-delta {delta_cls}">{fmt_pct(change)}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="custom-metric">
+                <div class="metric-label">开盘价</div>
+                <div class="metric-value">¥{fmt_num(latest['open'])}</div>
+                <div style="height:24px"></div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"""
+            <div class="custom-metric">
+                <div class="metric-label">成交量</div>
+                <div class="metric-value">{vol_val:.2f}</div>
+                <div style="font-size:13px;color:#888">万手</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col4:
+            st.markdown(f"""
+            <div class="custom-metric">
+                <div class="metric-label">成交额</div>
+                <div class="metric-value">{amt_val:.2f}</div>
+                <div style="font-size:13px;color:#888">亿元</div>
+            </div>
+            """, unsafe_allow_html=True)
     else:
         for c in [col1, col2, col3, col4]:
-            c.metric("暂无数据", "-")
+            c.markdown("""
+            <div class="custom-metric">
+                <div class="metric-value" style="color:#999">暂无数据</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
-        ["📈 行情数据", "💰 资金流向", "⏰ 上下午成交", "📋 数据汇总", "🏢 基本面"]
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["📈 行情数据", "💰 资金流向", "⏰ 上下午成交", "📋 数据汇总"]
     )
 
     with tab1:
@@ -182,6 +237,7 @@ def main():
             highs = [r["high"] for r in daily]
             lows = [r["low"] for r in daily]
             amounts = [r["amount"] for r in daily]
+            volumes = [r["volume"] for r in daily]
 
             ma5 = pd.Series(closes).rolling(5).mean()
             ma10 = pd.Series(closes).rolling(10).mean()
@@ -190,9 +246,9 @@ def main():
             dif, dea, macd = calc_macd(closes)
 
             fig = make_subplots(
-                rows=4, cols=1, shared_xaxes=True,
+                rows=5, cols=1, shared_xaxes=True,
                 vertical_spacing=0.03,
-                row_heights=[0.35, 0.15, 0.20, 0.30],
+                row_heights=[0.30, 0.10, 0.10, 0.20, 0.30],
             )
 
             fig.add_trace(
@@ -229,54 +285,62 @@ def main():
             )
 
             fig.add_trace(
+                go.Bar(x=dates, y=[v/1e4 for v in volumes],
+                       name="成交量", marker_color=colors,
+                       hovertemplate="%{x}<br>成交量: %{y:.2f}万手<extra></extra>"),
+                row=3, col=1,
+            )
+
+            fig.add_trace(
                 go.Scatter(x=dates, y=k_val, name="K",
                            line=dict(color="blue", width=1.5)),
-                row=3, col=1,
+                row=4, col=1,
             )
             fig.add_trace(
                 go.Scatter(x=dates, y=d_val, name="D",
                            line=dict(color="orange", width=1.5)),
-                row=3, col=1,
+                row=4, col=1,
             )
             fig.add_trace(
                 go.Scatter(x=dates, y=j_val, name="J",
                            line=dict(color="purple", width=1.5)),
-                row=3, col=1,
+                row=4, col=1,
             )
             fig.add_hline(y=80, line_width=1, line_color="gray",
-                          line_dash="dash", row=3, col=1)
+                          line_dash="dash", row=4, col=1)
             fig.add_hline(y=20, line_width=1, line_color="gray",
-                          line_dash="dash", row=3, col=1)
+                          line_dash="dash", row=4, col=1)
 
             macd_colors = [up_color if v >= 0 else down_color for v in macd]
             fig.add_trace(
                 go.Bar(x=dates, y=macd, name="MACD",
                        marker_color=macd_colors),
-                row=4, col=1,
+                row=5, col=1,
             )
             fig.add_trace(
                 go.Scatter(x=dates, y=dif, name="DIF",
                            line=dict(color="blue", width=1.5)),
-                row=4, col=1,
+                row=5, col=1,
             )
             fig.add_trace(
                 go.Scatter(x=dates, y=dea, name="DEA",
                            line=dict(color="orange", width=1.5)),
-                row=4, col=1,
+                row=5, col=1,
             )
-            fig.add_hline(y=0, line_width=1, line_color="gray", row=4, col=1)
+            fig.add_hline(y=0, line_width=1, line_color="gray", row=5, col=1)
 
             fig.update_layout(
                 title=f"{stock_name} ({code}) 行情数据",
-                height=800,
+                height=850,
                 hovermode="x unified",
                 xaxis_rangeslider_visible=False,
             )
             fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
             fig.update_yaxes(title_text="价格", row=1, col=1)
             fig.update_yaxes(title_text="成交额(亿元)", row=2, col=1)
-            fig.update_yaxes(title_text="KDJ", row=3, col=1)
-            fig.update_yaxes(title_text="MACD", row=4, col=1)
+            fig.update_yaxes(title_text="成交量(万手)", row=3, col=1)
+            fig.update_yaxes(title_text="KDJ", row=4, col=1)
+            fig.update_yaxes(title_text="MACD", row=5, col=1)
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("暂无日K线数据，请先采集")
@@ -334,6 +398,42 @@ def main():
             fig2.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
             fig2.add_hline(y=0, line_width=1, line_color="gray")
             st.plotly_chart(fig2, use_container_width=True)
+
+            st.divider()
+            st.subheader("当日资金分布")
+            latest_f = fund[-1]
+            date_label = fmt_date(latest_f["date"])
+            pie_labels = []
+            pie_values = []
+            pie_colors = []
+            for key, lbl in [
+                ("super_large_net_flow", "超大单"),
+                ("large_net_flow", "大单"),
+                ("medium_net_flow", "中单"),
+                ("small_net_flow", "小单"),
+            ]:
+                v = latest_f[key] or 0
+                pie_labels.append(lbl)
+                pie_values.append(abs(v))
+                pie_colors.append(up_color if v >= 0 else down_color)
+
+            fig3 = go.Figure(go.Pie(
+                labels=pie_labels, values=pie_values,
+                marker=dict(colors=pie_colors),
+                textinfo="label+percent",
+                hovertemplate="%{label}<br>净额: %{customdata:.2f}亿元<extra></extra>",
+                customdata=[
+                    (latest_f["super_large_net_flow"] or 0) / 1e8,
+                    (latest_f["large_net_flow"] or 0) / 1e8,
+                    (latest_f["medium_net_flow"] or 0) / 1e8,
+                    (latest_f["small_net_flow"] or 0) / 1e8,
+                ],
+            ))
+            fig3.update_layout(
+                title=f"{stock_name} - {date_label} 资金分布",
+                height=400,
+            )
+            st.plotly_chart(fig3, use_container_width=True)
         else:
             st.info("暂无资金流向数据，请先采集")
 
@@ -373,30 +473,53 @@ def main():
             fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
             st.plotly_chart(fig, use_container_width=True)
 
-            fig2 = go.Figure()
-            morning_ratio = [
-                m / (m + a) * 100 if (m + a) > 0 else 50
-                for m, a in zip(morning_amt, afternoon_amt)
-            ]
-            fig2.add_trace(go.Scatter(
-                x=dates, y=morning_ratio,
-                mode="lines+markers",
-                name="上午成交占比(%)",
-                line=dict(color="orange", width=2),
-                hovertemplate="%{x}<br>占比: %{y:.1f}%<extra></extra>",
-            ))
-            fig2.update_layout(
-                title=f"{stock_name} - 上午成交占比趋势",
-                yaxis=dict(
-                    title="占比(%)",
-                    range=[0, 100],
-                    ticksuffix="%",
-                ),
-                height=350,
-                hovermode="x unified",
+            st.divider()
+            st.subheader("分时成交额明细")
+
+            intra_dates = sorted(set(r["date"] for r in intra), reverse=True)
+            default_sel = intra_dates[0] if intra_dates else ""
+            sel_date = st.selectbox(
+                "选择日期", intra_dates,
+                format_func=lambda d: fmt_date(d),
+                index=0,
+                key="hourly_date",
             )
-            fig2.add_hline(y=50, line_width=1, line_color="gray", line_dash="dash")
-            st.plotly_chart(fig2, use_container_width=True)
+
+            cache_key = f"hourly_{code}_{sel_date}"
+            if cache_key not in st.session_state:
+                with st.spinner("正在获取分时数据..."):
+                    hourly_data = fetch_hourly_breakdown(code, sel_date)
+                    st.session_state[cache_key] = hourly_data
+            hourly_data = st.session_state[cache_key]
+
+            if hourly_data:
+                hours = [f"{r[2]}:00" for r in hourly_data]
+                hourly_amt = [r[4] / 1e8 for r in hourly_data]
+
+                fig3 = go.Figure()
+                fig3.add_trace(go.Bar(
+                    x=hours, y=hourly_amt,
+                    name="成交额",
+                    marker_color="steelblue",
+                    hovertemplate="%{x}<br>成交额: %{y:.2f}亿元<extra></extra>",
+                ))
+                fig3.add_trace(go.Scatter(
+                    x=hours, y=hourly_amt,
+                    name="趋势",
+                    mode="lines+markers",
+                    line=dict(color="red", width=2),
+                    hovertemplate="%{x}<br>成交额: %{y:.2f}亿元<extra></extra>",
+                ))
+                fig3.update_layout(
+                    title=f"{stock_name} - {fmt_date(sel_date)} 小时成交额",
+                    height=350,
+                    hovermode="x unified",
+                    xaxis=dict(title="时间"),
+                    yaxis=dict(title="成交额(亿元)"),
+                )
+                st.plotly_chart(fig3, use_container_width=True)
+            else:
+                st.info("暂无该日分时数据")
         else:
             st.info("暂无日内数据，采集时会尝试获取最近10个交易日的分钟数据")
 
@@ -499,104 +622,6 @@ def main():
 
         with col_png:
             st.info("Plotly 图表自带截图功能，悬停图表右上角点击相机图标即可保存 PNG")
-
-    with tab5:
-        st.subheader(f"{stock_name} ({code}) 公司基本面")
-
-        from cloak_fetcher import fetch_fundamentals_via_cloak
-        import baostock as bs
-
-        cache_key = f"fundamentals_{code}"
-        if cache_key not in st.session_state:
-            with st.spinner("正在获取基本面数据..."):
-                fd_raw = fetch_fundamentals_via_cloak(code)
-                st.session_state[cache_key] = fd_raw
-
-        fd_raw = st.session_state[cache_key]
-
-        if not fd_raw:
-            st.warning("暂未获取到基本面数据")
-            if st.button("获取基本面数据", key="fetch_fund"):
-                with st.spinner("正在获取..."):
-                    fd_raw = fetch_fundamentals_via_cloak(code)
-                    st.session_state[cache_key] = fd_raw
-                    st.rerun()
-        else:
-            FUND_FIELD_MAP = {
-                "f43": ("最新价", 0),
-                "f44": ("最高", 0),
-                "f45": ("最低", 0),
-                "f46": ("开盘", 0),
-                "f60": ("昨收", 0),
-                "f47": ("量比", 1),
-                "f48": ("换手率", 2),
-                "f162": ("市盈率(动态)", 1),
-                "f168": ("市盈率(TTM)", 1),
-                "f100": ("市盈率(静态)", 1),
-                "f167": ("市净率(LYR)", 1),
-                "f169": ("市净率(MRQ)", 1),
-                "f172": ("每股收益", 4),
-                "f175": ("每股净资产", 4),
-                "f177": ("每股营业收入", 4),
-                "f37": ("净资产收益率(ROE)", 2),
-                "f198": ("毛利率", 2),
-                "f84": ("总市值", 3),
-                "f85": ("流通市值", 3),
-                "f116": ("总股本", 3),
-                "f117": ("流通股本", 3),
-                "f39": ("每股未分配利润", 4),
-                "f40": ("每股公积金", 4),
-            }
-
-            def fmt_fund(v, label, fmt_type):
-                if v is None:
-                    return "-"
-                if not isinstance(v, (int, float)):
-                    return str(v)
-                if fmt_type == 0:
-                    return f"{v:.2f}"
-                elif fmt_type == 1:
-                    return f"{v:.2f}"
-                elif fmt_type == 2:
-                    return f"{v:.2f}%"
-                elif fmt_type == 3:
-                    return f"{v/1e8:.2f}亿"
-                elif fmt_type == 4:
-                    return f"{v:.3f}"
-                return f"{v:.2f}"
-
-            items = []
-            for field_id, (label, fmt_type) in FUND_FIELD_MAP.items():
-                val = fd_raw.get(field_id)
-                if val is not None:
-                    items.append((label, fmt_fund(val, label, fmt_type)))
-
-            # also add basic info from baostock
-            try:
-                bs.login()
-                rs = bs.query_stock_basic(code)
-                if rs.next():
-                    r = rs.get_row_data()
-                    items.insert(0, ("上市日期", r[2]))
-                    items.insert(0, ("股票类型", r[3]))
-                rs_industry = bs.query_stock_industry(code)
-                if rs_industry.next():
-                    r2 = rs_industry.get_row_data()
-                    items.insert(0, ("所属行业", r2[2]))
-                bs.logout()
-            except:
-                pass
-
-            cols = st.columns(3)
-            for i, (label, val) in enumerate(items):
-                with cols[i % 3]:
-                    st.metric(label=label, value=val)
-
-            if st.button("🔄 刷新基本面数据", key="refresh_fund"):
-                with st.spinner("正在获取..."):
-                    fd_raw = fetch_fundamentals_via_cloak(code)
-                    st.session_state[cache_key] = fd_raw
-                    st.rerun()
 
 
 if __name__ == "__main__":
