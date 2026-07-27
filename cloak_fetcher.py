@@ -156,3 +156,37 @@ def fetch_margin_via_cloak(stock_code):
     finally:
         if driver:
             driver.quit()
+
+
+def fetch_fundamentals_via_cloak(stock_code):
+    market = 1 if stock_code.startswith("6") else 0
+    fields = (
+        "f2,f3,f4,f5,f6,f12,f14,f15,f16,f17,f18,f20,f21,f31,f35,"
+        "f37,f38,f39,f40,f43,f44,f45,f46,f47,f48,f49,f50,f52,f53,f54,"
+        "f57,f58,f60,f62,f69,f84,f85,f86,f87,f100,f115,f116,f117,"
+        "f161,f162,f167,f168,f169,f172,f175,f177,f198"
+    )
+    url = (
+        f"https://push2.eastmoney.com/api/qt/stock/get"
+        f"?secid={market}.{stock_code}"
+        f"&fields={fields}"
+    )
+    driver = None
+    try:
+        driver = create_cloak_driver()
+        driver.get("https://quote.eastmoney.com")
+        time.sleep(2)
+        result = fetch_json_via_browser(driver, url)
+        if result["status"] != 200:
+            print(f"  [WARN] fundamentals API returned {result['status']}")
+            return {}
+        text = result["text"]
+        text = text[text.index("(")+1:text.rindex(")")] if text.startswith("jQuery") else text
+        data = json.loads(text)
+        return data.get("data", {})
+    except Exception as e:
+        print(f"  [WARN] fetch_fundamentals_via_cloak: {e}")
+        return {}
+    finally:
+        if driver:
+            driver.quit()

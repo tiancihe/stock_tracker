@@ -25,7 +25,8 @@ def _plot_price(data, ax1, ax2):
     ax1.set_ylabel("收盘价", **_font(9))
     ax1.grid(True, alpha=0.3)
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d"))
-    colors = ["g" if i >= 0 else "r" for i in range(len(closes))]
+    opens = [r["open"] for r in data]
+    colors = ["r" if closes[i] >= opens[i] else "g" for i in range(len(closes))]
     ax2.bar(dates, volumes, color=colors, alpha=0.6)
     ax2.set_ylabel("成交量(万手)", **_font(9))
     ax2.grid(True, alpha=0.3)
@@ -92,7 +93,7 @@ def generate_pdf(daily_data, fund_flow_data, intraday_data, margin_data, stock_n
     with PdfPages(pdf_path) as pdf:
         if daily_data:
             fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 4.5), gridspec_kw={"height_ratios": [3, 1]})
-            fig.suptitle(f"{stock_name} - 价格走势", **_font(12))
+            fig.suptitle(f"{stock_name} - 行情数据", **_font(12))
             _plot_price(daily_data, ax1, ax2)
             plt.tight_layout()
             pdf.savefig(fig, dpi=150)
