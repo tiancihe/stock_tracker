@@ -134,8 +134,32 @@ def main():
         format_func=lambda c: f"{c} - {STOCKS[c]}",
         index=codes.index(init_code),
     )
-    start_date = st.sidebar.date_input("开始日期", init_start)
-    end_date = st.sidebar.date_input("结束日期", init_end)
+    if "qs_start" not in st.session_state:
+        st.session_state.qs_start = init_start
+    if "qs_end" not in st.session_state:
+        st.session_state.qs_end = init_end
+
+    start_date = st.sidebar.date_input("开始日期", st.session_state.qs_start)
+    end_date = st.sidebar.date_input("结束日期", st.session_state.qs_end)
+
+    st.sidebar.caption("快捷范围")
+    sc1, sc2, sc3, sc4 = st.sidebar.columns(4)
+    if sc1.button("今天", width='stretch'):
+        st.session_state.qs_start = today
+        st.session_state.qs_end = today
+        st.rerun()
+    if sc2.button("10天", width='stretch'):
+        st.session_state.qs_start = today - timedelta(days=10)
+        st.session_state.qs_end = today
+        st.rerun()
+    if sc3.button("20天", width='stretch'):
+        st.session_state.qs_start = today - timedelta(days=20)
+        st.session_state.qs_end = today
+        st.rerun()
+    if sc4.button("30天", width='stretch'):
+        st.session_state.qs_start = today - timedelta(days=30)
+        st.session_state.qs_end = today
+        st.rerun()
 
     st.query_params["code"] = code
     st.query_params["start"] = str(start_date)
@@ -146,14 +170,17 @@ def main():
     start_str = start_date.strftime("%Y%m%d")
     end_str = end_date.strftime("%Y%m%d")
 
+    def nonnull(rows, key="close"):
+        return [r for r in rows if r.get(key) is not None]
+
     daily_raw = query_daily(code, start_str, end_str)
-    daily = [row_to_dict(r) for r in daily_raw]
+    daily = nonnull([row_to_dict(r) for r in daily_raw])
     fund_raw = query_fund_flow(code, start_str, end_str)
-    fund = [row_to_dict(r) for r in fund_raw]
+    fund = nonnull([row_to_dict(r) for r in fund_raw], "main_net_flow")
     intra_raw = query_intraday(code, start_str, end_str)
-    intra = [row_to_dict(r) for r in intra_raw]
+    intra = nonnull([row_to_dict(r) for r in intra_raw], "morning_amount")
     margin_raw = query_margin(code, start_str, end_str)
-    margin = [row_to_dict(r) for r in margin_raw]
+    margin = nonnull([row_to_dict(r) for r in margin_raw], "margin_balance")
 
     st.sidebar.divider()
     st.sidebar.caption("数据源状态")

@@ -1,13 +1,32 @@
+import os
+import sys
+import time
+import json
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-import time
-import json
+
+_CLOAK_DIR = os.environ.get("CLOAKBROWSER_DIR", "")
+if not _CLOAK_DIR:
+    if sys.platform == "win32":
+        _CLOAK_DIR = os.path.expanduser(r"~\.cloakbrowser\chromium-146.0.7680.177.5")
+    else:
+        _CLOAK_DIR = os.path.expanduser("~/.cloakbrowser/chromium-146.0.7680.177.5")
+
+_CHROME_BIN = os.environ.get(
+    "CLOAKBROWSER_CHROME",
+    os.path.join(_CLOAK_DIR, "chrome.exe" if sys.platform == "win32" else "chrome"),
+)
+_DRIVER_BIN = os.environ.get(
+    "CLOAKBROWSER_DRIVER",
+    os.path.join(_CLOAK_DIR, "chromedriver.exe" if sys.platform == "win32" else "chromedriver"),
+)
 
 
 def create_cloak_driver(headless=True):
     options = Options()
-    options.binary_location = r"C:\Users\tianc\.cloakbrowser\chromium-146.0.7680.177.5\chrome.exe"
+    if os.path.exists(_CHROME_BIN):
+        options.binary_location = _CHROME_BIN
     if headless:
         options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -16,9 +35,7 @@ def create_cloak_driver(headless=True):
     options.add_argument("--disable-extensions")
     options.page_load_strategy = "eager"
 
-    service = webdriver.ChromeService(
-        executable_path=r"C:\Users\tianc\.cloakbrowser\chromium-146.0.7680.177.5\chromedriver.exe"
-    )
+    service = webdriver.ChromeService(executable_path=_DRIVER_BIN)
     driver = webdriver.Chrome(service=service, options=options)
     driver.set_page_load_timeout(30)
     return driver

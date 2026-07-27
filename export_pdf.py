@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 from datetime import datetime
 import matplotlib
@@ -10,7 +11,31 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 plt.rcParams["axes.unicode_minus"] = False
 
-_FONT_PROPS = fm.FontProperties(fname="C:\\Windows\\Fonts\\simhei.ttf")
+_FONT_PROPS = None
+if sys.platform == "win32":
+    candidates = [
+        "C:\\Windows\\Fonts\\simhei.ttf",
+        "C:\\Windows\\Fonts\\msyh.ttc",
+    ]
+elif sys.platform == "darwin":
+    candidates = [
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+    ]
+else:
+    candidates = [
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    ]
+for path in candidates:
+    if os.path.exists(path):
+        try:
+            _FONT_PROPS = fm.FontProperties(fname=path)
+        except:
+            pass
+        if _FONT_PROPS:
+            break
 
 
 def _font(size=10):
