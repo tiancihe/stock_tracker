@@ -341,7 +341,7 @@ def main():
             fig.update_yaxes(title_text="成交量(万手)", row=3, col=1)
             fig.update_yaxes(title_text="KDJ", row=4, col=1)
             fig.update_yaxes(title_text="MACD", row=5, col=1)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.info("暂无日K线数据，请先采集")
 
@@ -381,7 +381,7 @@ def main():
             )
             fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
             fig.add_hline(y=0, line_width=1, line_color="gray")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             main_raw = [r["main_net_flow"] / 1e8 for r in fund]
             fig2 = go.Figure(go.Bar(
@@ -397,7 +397,7 @@ def main():
             )
             fig2.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
             fig2.add_hline(y=0, line_width=1, line_color="gray")
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width='stretch')
 
             st.divider()
             st.subheader("当日资金分布")
@@ -433,7 +433,7 @@ def main():
                 title=f"{stock_name} - {date_label} 资金分布",
                 height=400,
             )
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, width='stretch')
         else:
             st.info("暂无资金流向数据，请先采集")
 
@@ -471,7 +471,7 @@ def main():
                 hovermode="x unified",
             )
             fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
             st.divider()
             st.subheader("分时成交额明细")
@@ -517,7 +517,7 @@ def main():
                     xaxis=dict(title="时间"),
                     yaxis=dict(title="成交额(亿元)"),
                 )
-                st.plotly_chart(fig3, use_container_width=True)
+                st.plotly_chart(fig3, width='stretch')
             else:
                 st.info("暂无该日分时数据")
         else:
@@ -540,7 +540,7 @@ def main():
                 df_display[col] = df_display[col].apply(lambda v: f"{v:.2f}" if pd.notna(v) else "-")
             df_display["涨跌幅%"] = df_display["涨跌幅%"].apply(lambda v: f"{v:+.2f}%" if pd.notna(v) else "-")
             df_display["换手率%"] = df_display["换手率%"].apply(lambda v: f"{v:.2f}%" if pd.notna(v) else "-")
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_display, width='stretch', hide_index=True)
 
             st.subheader("成交额明细")
             df_amt = df[["date", "volume", "amount"]].copy()
@@ -549,7 +549,7 @@ def main():
             df_amt["日期"] = df_amt["date"].dt.strftime("%Y-%m-%d")
             st.dataframe(
                 df_amt[["日期", "成交量(万手)", "成交额(亿元)"]],
-                use_container_width=True, hide_index=True,
+                width='stretch', hide_index=True,
             )
         else:
             st.info("暂无数据")
@@ -576,7 +576,7 @@ def main():
             df_fund_display["收盘价"] = df_fund_display["收盘价"].apply(
                 lambda v: f"{v:.2f}" if pd.notna(v) else "-"
             )
-            st.dataframe(df_fund_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_fund_display, width='stretch', hide_index=True)
         else:
             st.info("暂无数据")
 
@@ -595,14 +595,14 @@ def main():
                 df_margin_display[col] = df_margin_display[col].apply(
                     lambda v: f"{v/1e8:.2f}亿元" if pd.notna(v) else "-"
                 )
-            st.dataframe(df_margin_display, use_container_width=True, hide_index=True)
+            st.dataframe(df_margin_display, width='stretch', hide_index=True)
         else:
             st.info("暂无数据")
 
         st.subheader("导出报告")
         col_pdf, col_png = st.columns(2)
         with col_pdf:
-            if st.button("📄 导出 PDF 报告", use_container_width=True):
+            if st.button("📄 导出 PDF 报告", width='stretch'):
                 with st.spinner("正在生成 PDF..."):
                     try:
                         start_label = start_date.strftime("%Y%m%d")
