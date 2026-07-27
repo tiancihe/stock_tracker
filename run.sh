@@ -15,23 +15,8 @@ echo ""
 read -rp "Choose [1-3]: " choice
 
 case "$choice" in
-  1)
-    echo "Collecting data..."
-    $PYTHON collector.py
-    echo "Done."
-    ;;
-  2)
-    echo "Starting dashboard..."
-    $PYTHON -m streamlit run dashboard.py
-    ;;
-  3)
-    echo "Collecting data..."
-    $PYTHON collector.py
-    echo "Starting dashboard..."
-    $PYTHON -m streamlit run dashboard.py
-    ;;
-  *)
-    echo "Invalid choice"
-    exit 1
-    ;;
+  1) $PYTHON main.py collect ;;
+  2) $PYTHON main.py dashboard ;;
+  3) $PYTHON main.py both ;;
+  *) echo "Invalid choice"; exit 1 ;;
 esac

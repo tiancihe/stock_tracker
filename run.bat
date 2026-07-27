@@ -1,10 +1,9 @@
 @echo off
 chcp 65001 >nul
 set PYTHON=C:\Users\tianc\.lmstudio\extensions\backends\vendor\_amphibian\cpython3.11-win-x86@6\python.exe
-set SCRIPTS=C:\Users\tianc\.lmstudio\extensions\backends\vendor\_amphibian\cpython3.11-win-x86@6\Scripts
 
 echo ========================================
-echo   股票追踪系统 - 兆易创新 (603986)
+echo   股票追踪系统
 echo ========================================
 echo.
 echo [1] 采集数据
@@ -19,27 +18,17 @@ if errorlevel 1 goto collect
 
 :collect
 echo.
-echo 正在采集数据...
-cd /d "%~dp0"
-"%PYTHON%" collector.py
+"%PYTHON%" main.py collect
 echo.
-echo 采集完成!
 pause
 exit /b
 
 :dashboard
 echo.
-echo 启动看板...
-cd /d "%~dp0"
-"%SCRIPTS%\streamlit.exe" run dashboard.py
+"%PYTHON%" main.py dashboard
 exit /b
 
 :both
 echo.
-echo 正在采集数据...
-cd /d "%~dp0"
-"%PYTHON%" collector.py
-echo.
-echo 采集完成，启动看板...
-"%SCRIPTS%\streamlit.exe" run dashboard.py
+"%PYTHON%" main.py both
 exit /b
