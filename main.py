@@ -2,13 +2,15 @@ import sys
 import os
 import signal
 import argparse
+import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
 
 
 def run_dashboard(port=8501, headless=False):
-    from streamlit.web import cli as stcli
+    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "0"
+    os.environ["BROWSER"] = "none"
 
     sys.argv = [
         "streamlit",
@@ -16,18 +18,24 @@ def run_dashboard(port=8501, headless=False):
         os.path.join(BASE_DIR, "dashboard.py"),
         f"--server.port={port}",
         "--server.address=0.0.0.0",
-        "--server.headless=true" if headless else "",
     ]
-    sys.argv = [a for a in sys.argv if a]
+    if headless:
+        sys.argv.append("--server.headless=true")
 
-    def _sigint(*_):
-        print("\nShutting down...")
-        sys.exit(0)
+    from streamlit.web import cli as stcli
+    try:
+        stcli.main()
+    except SystemExit:
+        pass
+    except Exception as e:
+        print(f"Error: {e}")
 
-    signal.signal(signal.SIGINT, _sigint)
-    signal.signal(signal.SIGTERM, _sigint)
-
-    sys.exit(stcli.main())
+    while True:
+        try:
+            time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+            break
 
 
 def run_collector():
