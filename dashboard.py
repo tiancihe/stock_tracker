@@ -274,7 +274,7 @@ def main():
 
             fig = make_subplots(
                 rows=5, cols=1, shared_xaxes=True,
-                vertical_spacing=0.03,
+                vertical_spacing=0.08,
                 row_heights=[0.30, 0.10, 0.10, 0.20, 0.30],
             )
 
