@@ -101,10 +101,6 @@ def calc_macd(closes, fast=12, slow=26, signal=9):
 def _init_from_query():
     params = st.query_params
     codes = list(STOCKS.keys())
-    default_code = codes[0]
-
-    q_code = params.get("code", default_code)
-    q_code = q_code if q_code in STOCKS else default_code
 
     today = datetime.now()
     default_start = today - timedelta(days=60)
@@ -121,23 +117,28 @@ def _init_from_query():
     except:
         parsed_end = today
 
-    return codes, default_code, q_code, parsed_start, parsed_end, today
+    return codes, parsed_start, parsed_end, today
 
 
 def main():
     st.title("📊 股票追踪与数据分析看板")
 
-    codes, default_code, init_code, init_start, init_end, today = _init_from_query()
+    codes, init_start, init_end, today = _init_from_query()
 
-    code = st.sidebar.selectbox(
-        "选择股票", codes,
-        format_func=lambda c: f"{c} - {STOCKS[c]}",
-        index=codes.index(init_code),
-    )
+    if "stock_code" not in st.session_state:
+        default_code = st.query_params.get("code", codes[0])
+        st.session_state.stock_code = default_code if default_code in STOCKS else codes[0]
+
     if "qs_start" not in st.session_state:
         st.session_state.qs_start = init_start
     if "qs_end" not in st.session_state:
         st.session_state.qs_end = init_end
+
+    code = st.sidebar.selectbox(
+        "选择股票", codes,
+        format_func=lambda c: f"{c} - {STOCKS[c]}",
+        key="stock_code",
+    )
 
     start_date = st.sidebar.date_input("开始日期", st.session_state.qs_start)
     end_date = st.sidebar.date_input("结束日期", st.session_state.qs_end)
