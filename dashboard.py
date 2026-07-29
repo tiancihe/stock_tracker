@@ -627,9 +627,9 @@ def main():
             st.info("暂无数据")
 
         st.subheader("导出报告")
-        col_pdf, col_png = st.columns(2)
+        col_pdf, col_xls, col_png = st.columns(3)
         with col_pdf:
-            if st.button("📄 导出 PDF 报告", width='stretch'):
+            if st.button("📄 PDF 报告", width='stretch'):
                 with st.spinner("正在生成 PDF..."):
                     try:
                         start_label = start_date.strftime("%Y%m%d")
@@ -639,7 +639,7 @@ def main():
                             stock_name, start_label, end_label,
                         )
                         st.download_button(
-                            label="⬇️ 点击下载 PDF",
+                            label="⬇️ 下载 PDF",
                             data=pdf_bytes,
                             file_name=f"{stock_name}_{start_label}_{end_label}.pdf",
                             mime="application/pdf",
@@ -647,8 +647,106 @@ def main():
                     except Exception as e:
                         st.error(f"PDF 生成失败: {e}")
 
+        with col_xls:
+            if st.button("📊 Excel 表格", width='stretch'):
+                with st.spinner("正在生成 Excel..."):
+                    try:
+                        start_label = start_date.strftime("%Y%m%d")
+                        end_label = end_date.strftime("%Y%m%d")
+                        import io
+                        buf = io.BytesIO()
+                        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                            if daily:
+                                df_d = pd.DataFrame(daily)
+                                df_d = df_d.rename(columns={
+                                    "date": "日期", "open": "开盘(元)", "close": "收盘(元)",
+                                    "high": "最高(元)", "low": "最低(元)",
+                                    "volume": "成交量(万手)", "amount": "成交额(亿元)",
+                                    "change_pct": "涨跌幅(%)", "turnover_rate": "换手率(%)",
+                                    "stock_code": "股票代码", "stock_name": "股票名称",
+                                })
+                                for c in ["开盘(元)", "收盘(元)", "最高(元)", "最低(元)"]:
+                                    if c in df_d.columns:
+                                        df_d[c] = df_d[c].apply(lambda v: round(v, 2) if pd.notna(v) else None)
+                                if "成交额(亿元)" in df_d.columns:
+                                    df_d["成交额(亿元)"] = df_d["成交额(亿元)"].apply(lambda v: round(v / 1e8, 2) if pd.notna(v) else None)
+                                if "成交量(万手)" in df_d.columns:
+                                    df_d["成交量(万手)"] = df_d["成交量(万手)"].apply(lambda v: round(v / 1e4, 2) if pd.notna(v) else None)
+                                if "涨跌幅(%)" in df_d.columns:
+                                    df_d["涨跌幅(%)"] = df_d["涨跌幅(%)"].apply(lambda v: round(v, 2) if pd.notna(v) else None)
+                                if "换手率(%)" in df_d.columns:
+                                    df_d["换手率(%)"] = df_d["换手率(%)"].apply(lambda v: round(v, 2) if pd.notna(v) else None)
+                                drop_cols = [c for c in ["股票代码", "股票名称"] if c in df_d.columns]
+                                df_d = df_d.drop(columns=drop_cols, errors="ignore")
+                                df_d = df_d[sorted(df_d.columns, key=lambda x: {"日期": "0", "开盘(元)": "1", "收盘(元)": "2", "最高(元)": "3", "最低(元)": "4", "成交量(万手)": "5", "成交额(亿元)": "6", "涨跌幅(%)": "7", "换手率(%)": "8"}.get(x, x))]
+                                df_d.to_excel(writer, sheet_name="日K线", index=False)
+                            if fund:
+                                df_f = pd.DataFrame(fund)
+                                df_f = df_f.rename(columns={
+                                    "date": "日期", "close": "收盘价(元)", "change_pct": "涨跌幅(%)",
+                                    "main_net_flow": "主力净流入(亿元)",
+                                    "main_net_flow_pct": "主力净占比(%)",
+                                    "super_large_net_flow": "超大单净流入(亿元)",
+                                    "super_large_net_flow_pct": "超大单净占比(%)",
+                                    "large_net_flow": "大单净流入(亿元)",
+                                    "large_net_flow_pct": "大单净占比(%)",
+                                    "medium_net_flow": "中单净流入(亿元)",
+                                    "medium_net_flow_pct": "中单净占比(%)",
+                                    "small_net_flow": "小单净流入(亿元)",
+                                    "small_net_flow_pct": "小单净占比(%)",
+                                    "stock_code": "股票代码",
+                                })
+                                flow_cols = [c for c in df_f.columns if "净流入(亿元)" in c]
+                                for c in flow_cols:
+                                    df_f[c] = df_f[c].apply(lambda v: round(v / 1e8, 2) if pd.notna(v) else None)
+                                pct_cols = [c for c in df_f.columns if "净占比" in c or "涨跌幅" in c]
+                                for c in pct_cols:
+                                    df_f[c] = df_f[c].apply(lambda v: round(v, 2) if pd.notna(v) else None)
+                                if "收盘价(元)" in df_f.columns:
+                                    df_f["收盘价(元)"] = df_f["收盘价(元)"].apply(lambda v: round(v, 2) if pd.notna(v) else None)
+                                df_f = df_f.drop(columns=["股票代码"], errors="ignore")
+                                df_f.to_excel(writer, sheet_name="资金流向", index=False)
+                            if margin:
+                                df_m = pd.DataFrame(margin)
+                                df_m = df_m.rename(columns={
+                                    "date": "日期", "margin_balance": "融资余额(亿元)",
+                                    "margin_buy": "融资买入(亿元)", "margin_sell": "融资偿还(亿元)",
+                                    "stock_code": "股票代码",
+                                })
+                                for c in ["融资余额(亿元)", "融资买入(亿元)", "融资偿还(亿元)"]:
+                                    if c in df_m.columns:
+                                        df_m[c] = df_m[c].apply(lambda v: round(v / 1e8, 2) if pd.notna(v) else None)
+                                df_m = df_m.drop(columns=["股票代码"], errors="ignore")
+                                df_m.to_excel(writer, sheet_name="融资融券", index=False)
+                            if intra:
+                                df_i = pd.DataFrame(intra)
+                                df_i = df_i.rename(columns={
+                                    "date": "日期", "morning_volume": "上午成交量(万手)",
+                                    "morning_amount": "上午成交额(亿元)",
+                                    "afternoon_volume": "下午成交量(万手)",
+                                    "afternoon_amount": "下午成交额(亿元)",
+                                    "stock_code": "股票代码",
+                                })
+                                for c in ["上午成交量(万手)", "下午成交量(万手)"]:
+                                    if c in df_i.columns:
+                                        df_i[c] = df_i[c].apply(lambda v: round(v / 1e4, 2) if pd.notna(v) else None)
+                                for c in ["上午成交额(亿元)", "下午成交额(亿元)"]:
+                                    if c in df_i.columns:
+                                        df_i[c] = df_i[c].apply(lambda v: round(v / 1e8, 2) if pd.notna(v) else None)
+                                df_i = df_i.drop(columns=["股票代码"], errors="ignore")
+                                df_i.to_excel(writer, sheet_name="上下午成交", index=False)
+                        buf.seek(0)
+                        st.download_button(
+                            label="⬇️ 下载 Excel",
+                            data=buf,
+                            file_name=f"{stock_name}_{start_label}_{end_label}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
+                    except Exception as e:
+                        st.error(f"Excel 生成失败: {e}")
+
         with col_png:
-            st.info("Plotly 图表自带截图功能，悬停图表右上角点击相机图标即可保存 PNG")
+            st.info("图表右上角相机图标可保存 PNG")
 
 
 if __name__ == "__main__":
